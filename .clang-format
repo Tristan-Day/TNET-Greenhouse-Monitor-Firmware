@@ -5,7 +5,7 @@ AllowShortFunctionsOnASingleLine: None
 AllowShortBlocksOnASingleLine: true
 
 IndentWidth: 4
-ColumnLimit: 85
+ColumnLimit: 80
 
 NamespaceIndentation: All
 PointerAlignment: Left
