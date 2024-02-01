@@ -1,4 +1,7 @@
+#include "Secrets.hpp"
+
 #include <Wire.h>
+#include <SPIFFS.h>
 #include <FS.h>
 
 #include <Adafruit_BME280.h>
@@ -7,16 +10,19 @@
 #include <WiFiClientSecure.h>
 #include <PubSubClient.h>
 
-#include "Secrets.hpp"
+#include <ArduinoJson.h>
 
 // Upload interval in secconds
-const char UPLOAD_INTERVAL = 60;
+const short UPLOAD_INTERVAL = 300;
+
+// Time delay after publishing in millisecconds
+const long UPLOAD_DURATION = 2000;
 
 // WiFi timeout in secconds
 const char WIFI_TIMEOUT = 30;
 
 // Soil Moisture
-const char SMS_A = 32;
+const char SMS_A = 33;
 const char SMS_B = 32;
 
 Adafruit_BME280 BME280;

@@ -1,5 +1,4 @@
 #include "Main.hpp"
-#include <SPIFFS.h>
 
 uint8_t StatusRegister::dump()
 {
@@ -13,10 +12,6 @@ uint8_t StatusRegister::dump()
 
 void awaitNextReading()
 {
-#ifdef DEBUG
-    Serial.println("[INFO] SLEEPING");
-#endif
-
     esp_sleep_enable_timer_wakeup(UPLOAD_INTERVAL * 1000 * 1000);
     esp_deep_sleep_start();
 }
@@ -74,7 +69,6 @@ void setup()
     WiFi.begin(Secrets::WIFI_SSID, Secrets::WIFI_PASSWORD);
 
     WIFI_CLIENT.setPrivateKey(Secrets::PRIVATE_KEY);
-
     WIFI_CLIENT.setCACert(Secrets::ROOT_CERTIFICATE);
     WIFI_CLIENT.setCertificate(Secrets::CLIENT_CERTIFICATE);
 
@@ -99,9 +93,7 @@ void setup()
     Serial.println("[INFO] MQTT CONN INIT");
 #endif
 
-    MQTT_CLIENT.setServer(Secrets::MQTT_BROKER_DOMAIN,
-                          Secrets::MQTT_BROKER_PORT);
-
+    MQTT_CLIENT.setServer(Secrets::MQTT_BROKER_DOMAIN, Secrets::MQTT_BROKER_PORT);
     status->MQTT = MQTT_CLIENT.connect(Secrets::MQTT_CLIENT_ID);
 
     if (!status->MQTT)
@@ -117,12 +109,14 @@ void setup()
 
 void loop()
 {
+    JsonDocument packet;
+
 #ifdef INCLUDE_SGP30
     status->SGP30 = SGP30.IAQmeasure();
 
     if (status->SGP30)
     {
-        MQTT_CLIENT.publish("/GM/CarbonDioxide", String(SGP30.eCO2).c_str());
+        packet["CarbonDioxide"] = String(SGP30.eCO2);
     }
     else
     {
@@ -136,14 +130,9 @@ void loop()
 
     if (status->BME280)
     {
-        MQTT_CLIENT.publish("/GM/Temperature",
-                            String(BME280.readTemperature()).c_str());
-
-        MQTT_CLIENT.publish("/GM/Humidity",
-                            String(BME280.readHumidity()).c_str());
-
-        MQTT_CLIENT.publish("/GM/Pressure",
-                            String(BME280.readPressure()).c_str());
+        packet["Temperature"] = String(BME280.readTemperature());
+        packet["Humidity"] = String(BME280.readHumidity());
+        packet["Pressure"] = String(BME280.readPressure());
     }
     else
     {
@@ -152,11 +141,22 @@ void loop()
 #endif
     }
 
-    MQTT_CLIENT.publish("/GM/SoilMoisturePrimary",
-                        String(analogRead(SMS_A)).c_str());
+    packet["SoilMoisturePrimary"] =  String(analogRead(SMS_A));
+    packet["SoilMoistureSecondary"] =  String(analogRead(SMS_B));
 
-    MQTT_CLIENT.publish("/GM/SoilMoistureSecondary",
-                        String(analogRead(SMS_B)).c_str());
+#ifdef DEBUG
+    Serial.println("[INFO] Sending Data");
+#endif
+    
+    String data;
+    serializeJson(packet, data);
+
+    MQTT_CLIENT.publish(Secrets::MQTT_CLIENT_TOPIC, data.c_str());
+    delay(UPLOAD_DURATION);
+
+#ifdef DEBUG
+    Serial.println("[INFO] SLEEPING");
+#endif
 
     awaitNextReading();
 }
