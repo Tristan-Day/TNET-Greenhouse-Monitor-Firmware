@@ -481,7 +481,6 @@
             "defines": [
                 "PLATFORMIO=60113",
                 "ARDUINO_LOLIN32_LITE",
-                "DEBUG",
                 "INCLUDE_SGP30",
                 "HAVE_CONFIG_H",
                 "MBEDTLS_CONFIG_FILE=\"mbedtls/esp_config.h\"",

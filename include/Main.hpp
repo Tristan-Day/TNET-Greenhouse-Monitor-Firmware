@@ -12,14 +12,17 @@
 
 #include <ArduinoJson.h>
 
-// Upload interval in secconds
+// Upload interval in seconds
 const short UPLOAD_INTERVAL = 300;
 
-// Time delay after publishing in millisecconds
+// Time delay after publishing in milliseconds
 const long UPLOAD_DURATION = 2000;
 
-// WiFi timeout in secconds
+// WiFi timeout in seconds
 const char WIFI_TIMEOUT = 30;
+
+// SGP30 measurement timeout in seconds
+const char SGP30_TIMEOUT = 20;
 
 // Soil Moisture
 const char SMS_A = 33;

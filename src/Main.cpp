@@ -21,7 +21,7 @@ void setup()
     Serial.begin(115200);
 
 #ifdef DEBUG
-    Serial.println("[INFO] DEVICE INIT");
+    Serial.println("[INFO] HARDWARE INIT");
 #endif
 
     status = new StatusRegister();
@@ -34,6 +34,34 @@ void setup()
 
 #ifdef INCLUDE_SGP30
     status->SGP30 = SGP30.begin();
+
+    if (!status->SGP30)
+    {
+#ifdef DEBUG
+        Serial.println("[ERR] SGP30 FAILED TO INITALISE");
+#endif
+    }
+
+    // Wait for the sensor to warmup
+    for (int i = 0; i <= SGP30_TIMEOUT; i++)
+    {        
+        SGP30.IAQmeasure();
+
+        if (SGP30.eCO2 != 400)
+        {
+            status->SGP30 = true;
+            break;
+        }
+        delay(1000);
+    }
+
+    if (!status->SGP30)
+    {
+#ifdef DEBUG
+        Serial.println("[ERR] SGP30 FAILED TO INITALISE");
+#endif
+        SGP30.softReset();
+    }
 #endif
 
     // Configure moisture sensors
@@ -112,7 +140,12 @@ void loop()
     JsonDocument packet;
 
 #ifdef INCLUDE_SGP30
-    status->SGP30 = SGP30.IAQmeasure();
+
+    if (status->SGP30)
+    {
+        status->SGP30 = SGP30.IAQmeasure();
+        delay(500);
+    }
 
     if (status->SGP30)
     {
@@ -144,13 +177,13 @@ void loop()
 #endif
     }
 
-    packet["SoilMoisturePrimary"] =  String(analogRead(SMS_A));
-    packet["SoilMoistureSecondary"] =  String(analogRead(SMS_B));
+    packet["SoilMoisturePrimary"] = String(analogRead(SMS_A));
+    packet["SoilMoistureSecondary"] = String(analogRead(SMS_B));
 
 #ifdef DEBUG
     Serial.println("[INFO] SENDING DATA");
 #endif
-    
+
     String data;
     serializeJson(packet, data);
 
