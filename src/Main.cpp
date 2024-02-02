@@ -16,11 +16,63 @@ void awaitNextReading()
     esp_deep_sleep_start();
 }
 
-void setup()
+void uploadDataPacket(JsonDocument packet)
 {
-    Serial.begin(115200);
+#ifdef DEBUG
+    Serial.println("[INFO] WIFI INIT");
+#endif
+
+    WiFi.begin(Secrets::WIFI_SSID, Secrets::WIFI_PASSWORD);
+
+    WIFI_CLIENT.setPrivateKey(Secrets::PRIVATE_KEY);
+    WIFI_CLIENT.setCACert(Secrets::ROOT_CERTIFICATE);
+    WIFI_CLIENT.setCertificate(Secrets::CLIENT_CERTIFICATE);
+
+    // Wait for the connection to establish
+    for (int i = 0; i <= WIFI_TIMEOUT * 10; i++)
+    {
+        if (WiFi.isConnected())
+        {
+            status->WIFI = true;
+            break;
+        }
+        delay(100);
+    }
+
+    if (!status->WIFI)
+    {
+        Serial.println("[ERR] WIFI CONN FAIL");
+        awaitNextReading();
+    }
 
 #ifdef DEBUG
+    Serial.println("[INFO] MQTT CONN INIT");
+#endif
+
+    MQTT_CLIENT.setServer(Secrets::MQTT_BROKER_DOMAIN, Secrets::MQTT_BROKER_PORT);
+    status->MQTT = MQTT_CLIENT.connect(Secrets::MQTT_CLIENT_ID);
+
+    if (!status->MQTT)
+    {
+        Serial.printf("[ERR] MQTT CONN FAIL: %i", MQTT_CLIENT.state());
+        awaitNextReading();
+    }
+
+    String data;
+    serializeJson(packet, data);
+
+#ifdef DEBUG
+    serializeJson(packet, Serial);
+#endif
+
+    MQTT_CLIENT.publish(Secrets::MQTT_CLIENT_TOPIC, data.c_str());
+    delay(sizeof(data));
+}
+
+void setup()
+{
+#ifdef DEBUG
+    Serial.begin(115200);
     Serial.println("[INFO] HARDWARE INIT");
 #endif
 
@@ -34,34 +86,6 @@ void setup()
 
 #ifdef INCLUDE_SGP30
     status->SGP30 = SGP30.begin();
-
-    if (!status->SGP30)
-    {
-#ifdef DEBUG
-        Serial.println("[ERR] SGP30 FAILED TO INITALISE");
-#endif
-    }
-
-    // Wait for the sensor to warmup
-    for (int i = 0; i <= SGP30_TIMEOUT; i++)
-    {        
-        SGP30.IAQmeasure();
-
-        if (SGP30.eCO2 != 400)
-        {
-            status->SGP30 = true;
-            break;
-        }
-        delay(1000);
-    }
-
-    if (!status->SGP30)
-    {
-#ifdef DEBUG
-        Serial.println("[ERR] SGP30 FAILED TO INITALISE");
-#endif
-        SGP30.softReset();
-    }
 #endif
 
     // Configure moisture sensors
@@ -90,72 +114,24 @@ void setup()
     file.readBytes(Secrets::ROOT_CERTIFICATE, 2048);
     file.close();
 
-#ifdef DEBUG
-    Serial.println("[INFO] WIFI INIT");
-#endif
-
-    WiFi.begin(Secrets::WIFI_SSID, Secrets::WIFI_PASSWORD);
-
-    WIFI_CLIENT.setPrivateKey(Secrets::PRIVATE_KEY);
-    WIFI_CLIENT.setCACert(Secrets::ROOT_CERTIFICATE);
-    WIFI_CLIENT.setCertificate(Secrets::CLIENT_CERTIFICATE);
-
-    // Wait for the connection to establish
-    for (int i = 0; i <= WIFI_TIMEOUT; i++)
-    {
-        if (WiFi.isConnected())
-        {
-            status->WIFI = true;
-            break;
-        }
-        delay(1000);
-    }
-
-    if (!status->WIFI)
-    {
-        Serial.println("[ERR] WIFI CONN FAIL");
-        awaitNextReading();
-    }
-
-#ifdef DEBUG
-    Serial.println("[INFO] MQTT CONN INIT");
-#endif
-
-    MQTT_CLIENT.setServer(Secrets::MQTT_BROKER_DOMAIN, Secrets::MQTT_BROKER_PORT);
-    status->MQTT = MQTT_CLIENT.connect(Secrets::MQTT_CLIENT_ID);
-
-    if (!status->MQTT)
-    {
-        Serial.printf("[ERR] MQTT CONN FAIL: %i", MQTT_CLIENT.state());
-        awaitNextReading();
-    }
-
-#ifdef DEBUG
-    Serial.printf("[INFO] BOOT STATUS: %u \n", status->dump());
-#endif
-}
-
-void loop()
-{
     JsonDocument packet;
 
 #ifdef INCLUDE_SGP30
 
     if (status->SGP30)
     {
-        status->SGP30 = SGP30.IAQmeasure();
-        delay(500);
-    }
+        // Wait for the sensor to warmup
+        for (int i = 0; i <= SGP30_TIMEOUT; i++)
+        {
+            SGP30.IAQmeasure();
+            delay(1000);
 
-    if (status->SGP30)
-    {
-        packet["CarbonDioxide"] = String(SGP30.eCO2);
-    }
-    else
-    {
-#ifdef DEBUG
-        Serial.println("[ERR] SGP30 ERROR");
-#endif
+            if (SGP30.eCO2 != 400 && SGP30.TVOC != 0)
+            {
+                packet["CarbonDioxide"] = String(SGP30.eCO2);
+                break;
+            }
+        }
     }
 
     // Power down the device
@@ -184,11 +160,7 @@ void loop()
     Serial.println("[INFO] SENDING DATA");
 #endif
 
-    String data;
-    serializeJson(packet, data);
-
-    MQTT_CLIENT.publish(Secrets::MQTT_CLIENT_TOPIC, data.c_str());
-    delay(UPLOAD_DURATION);
+    uploadDataPacket(packet);
 
 #ifdef DEBUG
     Serial.println("[INFO] SLEEPING");
@@ -196,3 +168,5 @@ void loop()
 
     awaitNextReading();
 }
+
+void loop(){};
