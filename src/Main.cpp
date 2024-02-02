@@ -124,6 +124,9 @@ void loop()
         Serial.println("[ERR] SGP30 ERROR");
 #endif
     }
+
+    // Power down the device
+    SGP30.softReset();
 #endif
 
     status->BME280 = BME280.takeForcedMeasurement();
@@ -145,7 +148,7 @@ void loop()
     packet["SoilMoistureSecondary"] =  String(analogRead(SMS_B));
 
 #ifdef DEBUG
-    Serial.println("[INFO] Sending Data");
+    Serial.println("[INFO] SENDING DATA");
 #endif
     
     String data;
