@@ -1,18 +1,85 @@
 #include "Main.hpp"
 
-uint8_t StatusRegister::dump()
+uint64_t toMicroseconds(uint32_t seconds)
 {
-    uint8_t status = WIRE;
+    return seconds * 1000 * 1000;
+}
 
-    status += (WIFI << 1) + (MQTT << 2);
-    status += (BME280 << 3) + (SGP30 << 4);
+uint32_t getNextInterval()
+{
 
-    return status;
+    uint32_t now = RTC.getLocalEpoch();
+    uint32_t lastSync = PREFS.getULong("LAST-SYNC", NTP_INTERVAL);
+
+    if (now - lastSync > NTP_INTERVAL)
+    {
+#ifdef DEBUG
+        Serial.println("[INFO] RTC RESYNC");
+#endif
+
+        // Resynchronise the RTC
+        NTP_CLIENT.begin();
+
+        // Wait for Timesync
+        for (int i = 0; i < NTP_TIMEOUT * 100; i++)
+        {
+            status->NTP = NTP_CLIENT.forceUpdate();
+
+            if (status->NTP)
+            {
+                break;
+            }
+
+            delay(100);
+        }
+
+        if (status->NTP)
+        {
+            PREFS.putULong("LAST-SYNC", NTP_CLIENT.getEpochTime());
+            RTC.setTime(NTP_CLIENT.getEpochTime());
+        }
+        else
+        {
+            Serial.println("[ERR] RTC TIMESYNC FAIL");
+            return toMicroseconds(UPLOAD_INTERVAL_DAY);
+        }
+
+#ifdef DEBUG
+        Serial.println("[INFO] RTC TIMESYNC COMPLETE");
+#endif
+    }
+
+    // Upload interval logic
+    uint32_t timeSinceMidnight =
+        RTC.getSecond() + RTC.getMinute() * 60 + RTC.getHour(true) * 3600;
+
+    // Handle daytime interval
+    if (SLEEP_END <= timeSinceMidnight && timeSinceMidnight < SLEEP_START)
+    {
+        return toMicroseconds(UPLOAD_INTERVAL_DAY);
+    }
+
+    uint32_t wakeup = timeSinceMidnight + UPLOAD_INTERVAL_NIGHT;
+
+    // Ensure the interval does not enter daytime hours
+    if (SLEEP_END < wakeup && wakeup < SLEEP_START)
+    {
+        return toMicroseconds(SLEEP_END - timeSinceMidnight);
+    }
+
+    // Handle nighttime interval
+    return toMicroseconds(UPLOAD_INTERVAL_NIGHT);
 }
 
 void awaitNextReading()
 {
-    esp_sleep_enable_timer_wakeup(UPLOAD_INTERVAL * 1000 * 1000);
+    uint64_t interval = getNextInterval();
+
+#ifdef DEBUG
+    Serial.printf("[INFO] SLEEP DURATION: %u", interval);
+#endif
+
+    esp_sleep_enable_timer_wakeup(interval);
     esp_deep_sleep_start();
 }
 
@@ -24,9 +91,9 @@ void uploadDataPacket(JsonDocument packet)
 
     WiFi.begin(Secrets::WIFI_SSID, Secrets::WIFI_PASSWORD);
 
-    WIFI_CLIENT.setPrivateKey(Secrets::PRIVATE_KEY);
-    WIFI_CLIENT.setCACert(Secrets::ROOT_CERTIFICATE);
-    WIFI_CLIENT.setCertificate(Secrets::CLIENT_CERTIFICATE);
+    WIFI_TLS_CLIENT.setPrivateKey(Secrets::PRIVATE_KEY);
+    WIFI_TLS_CLIENT.setCACert(Secrets::ROOT_CERTIFICATE);
+    WIFI_TLS_CLIENT.setCertificate(Secrets::CLIENT_CERTIFICATE);
 
     // Wait for the connection to establish
     for (int i = 0; i <= WIFI_TIMEOUT * 10; i++)
@@ -45,34 +112,44 @@ void uploadDataPacket(JsonDocument packet)
         awaitNextReading();
     }
 
-#ifdef DEBUG
-    Serial.println("[INFO] MQTT CONN INIT");
-#endif
+    #ifdef DEBUG
+        Serial.println("[INFO] MQTT CONN INIT");
+    #endif
 
-    MQTT_CLIENT.setServer(Secrets::MQTT_BROKER_DOMAIN, Secrets::MQTT_BROKER_PORT);
-    status->MQTT = MQTT_CLIENT.connect(Secrets::MQTT_CLIENT_ID);
+        MQTT_CLIENT.setServer(Secrets::MQTT_BROKER_DOMAIN,
+                              Secrets::MQTT_BROKER_PORT);
+        status->MQTT = MQTT_CLIENT.connect(Secrets::MQTT_CLIENT_ID);
 
-    if (!status->MQTT)
-    {
-        Serial.printf("[ERR] MQTT CONN FAIL: %i", MQTT_CLIENT.state());
-        awaitNextReading();
-    }
+        if (!status->MQTT)
+        {
+            Serial.printf("[ERR] MQTT CONN FAIL: %i", MQTT_CLIENT.state());
+            awaitNextReading();
+        }
 
-    String data;
-    serializeJson(packet, data);
+        String data;
+        serializeJson(packet, data);
 
-#ifdef DEBUG
-    serializeJson(packet, Serial);
-#endif
+    #ifdef DEBUG
+        serializeJson(packet, Serial);
+    #endif
 
-    MQTT_CLIENT.publish(Secrets::MQTT_CLIENT_TOPIC, data.c_str());
-    delay(sizeof(data));
+        MQTT_CLIENT.publish(Secrets::MQTT_CLIENT_TOPIC, data.c_str());
+        delay(sizeof(data));
+
+    #ifdef DEBUG
+        Serial.println("[INFO] MQTT CONN END");
+    #endif
+
+        MQTT_CLIENT.disconnect();
 }
 
 void setup()
 {
-#ifdef DEBUG
     Serial.begin(115200);
+    PREFS.begin("MAIN");
+
+#ifdef DEBUG
+
     Serial.println("[INFO] HARDWARE INIT");
 #endif
 
