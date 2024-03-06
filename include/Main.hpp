@@ -37,9 +37,6 @@ const long MIDNIGHT = 86400;
 const long NTP_INTERVAL = 172800;
 const char NTP_TIMEOUT = 10;
 
-// WiFi timeout in seconds
-const char WIFI_TIMEOUT = 30;
-
 // SGP30 measurement timeout in seconds
 const char SGP30_TIMEOUT = 60;
 
@@ -61,13 +58,7 @@ ESP32Time RTC;
 
 struct StatusRegister
 {
-    bool WIRE;
-    bool SPIFFS;
-
-    bool WIFI;
-
     bool NTP;
-    bool MQTT;
 
     bool BME280;
     bool SGP30;
