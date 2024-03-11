@@ -127,13 +127,13 @@ void upload(JsonDocument packet)
 }
 
 void setup()
-{
+{  
     Serial.begin(115200);
     PREFS.begin("MAIN");
 
 #ifdef DEBUG
-
     Serial.println("[INFO] HARDWARE INIT");
+    Serial.printf("[INFO] DEVICE ID: %s\n", Secrets::MQTT_CLIENT_ID);
 #endif
 
     status = new StatusRegister();
@@ -150,7 +150,7 @@ void setup()
         sleep();
     }
 
-#ifdef INCLUDE_BME280
+#ifndef EXCLUDE_BME280
     status->BME280 = BME280.begin(0x76);
     BME280.setSampling(Adafruit_BME280::MODE_FORCED);
 
@@ -160,7 +160,7 @@ void setup()
     }
 #endif
 
-#ifdef INCLUDE_SGP30
+#ifndef EXCLUDE_SGP30
     status->SGP30 = SGP30.begin();
 
     if (!status->SGP30)
@@ -195,7 +195,7 @@ void setup()
 
     JsonDocument packet;
 
-#ifdef INCLUDE_SGP30
+#ifndef EXCLUDE_SGP30
 
     if (status->SGP30)
     {
@@ -208,7 +208,7 @@ void setup()
             }
             delay(1000);
 
-            if (SGP30.eCO2 != 400 && SGP30.TVOC != 0)
+            if (SGP30.eCO2 > 450)
             {
                 packet["CarbonDioxide"] = String(SGP30.eCO2);
                 break;
@@ -220,7 +220,7 @@ void setup()
     SGP30.softReset();
 #endif
 
-#ifdef INCLUDE_BME280
+#ifndef EXCLUDE_BME280
 
     status->BME280 = BME280.takeForcedMeasurement();
 
@@ -232,9 +232,7 @@ void setup()
     }
     else
     {
-#ifdef DEBUG
         Serial.println("[ERR] BME280 ERROR");
-#endif
     }
 
 #endif

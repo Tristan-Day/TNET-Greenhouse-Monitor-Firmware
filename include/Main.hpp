@@ -38,7 +38,7 @@ const long NTP_INTERVAL = 172800;
 const char NTP_TIMEOUT = 10;
 
 // SGP30 measurement timeout in seconds
-const char SGP30_TIMEOUT = 60;
+const short SGP30_TIMEOUT = 300;
 
 // Soil Moisture
 const char SMS_A = 33;
