@@ -34,7 +34,10 @@ const short SLEEP_END = 18000;
 const long MIDNIGHT = 86400;
 
 // NTP configuration in seconds
-const long NTP_INTERVAL = 172800;
+const long WIFI_TIMEOUT = 30;
+
+// NTP configuration in seconds
+const long NTP_INTERVAL = 86400;
 const char NTP_TIMEOUT = 10;
 
 // SGP30 measurement timeout in seconds
@@ -59,7 +62,6 @@ ESP32Time RTC;
 struct StatusRegister
 {
     bool NTP;
-
     bool BME280;
     bool SGP30;
 };

@@ -483,8 +483,9 @@
                 ]
             },
             "defines": [
-                "PLATFORMIO=60113",
+                "PLATFORMIO=60114",
                 "ARDUINO_LOLIN32_LITE",
+                "EXCLUDE_SGP30",
                 "HAVE_CONFIG_H",
                 "MBEDTLS_CONFIG_FILE=\"mbedtls/esp_config.h\"",
                 "UNITY_INCLUDE_CONFIG_H",

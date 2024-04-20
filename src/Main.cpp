@@ -18,12 +18,11 @@ uint64_t getSleepInterval()
     uint32_t now = RTC.getLocalEpoch();
     uint32_t lastSync = PREFS.getULong("LAST-SYNC", NTP_INTERVAL);
 
-    if (now - lastSync > NTP_INTERVAL)
+    if (WiFi.isConnected() && now - lastSync > NTP_INTERVAL)
     {
 #ifdef DEBUG
         Serial.println("[INFO] RTC RESYNC");
 #endif
-
         // Resynchronise the RTC
         NTP_CLIENT.begin();
 
@@ -50,11 +49,11 @@ uint64_t getSleepInterval()
             Serial.println("[ERR] RTC TIMESYNC FAIL");
             return UPLOAD_INTERVAL_DAY;
         }
+    }
 
 #ifdef DEBUG
-        Serial.printf("[INFO] TIME: %s\n", RTC.getTimeDate().c_str());
+    Serial.printf("[INFO] TIME: %s\n", RTC.getTimeDate().c_str());
 #endif
-    }
 
     // Upload interval logic
     uint32_t timeSinceMidnight =
@@ -99,7 +98,8 @@ void upload(JsonDocument packet)
     Serial.println("[INFO] MQTT CONN INIT");
 #endif
 
-    MQTT_CLIENT.setServer(Secrets::MQTT_BROKER_DOMAIN, Secrets::MQTT_BROKER_PORT);
+    MQTT_CLIENT.setServer(Secrets::MQTT_BROKER_DOMAIN,
+                          Secrets::MQTT_BROKER_PORT);
     bool MQTT_STATUS = MQTT_CLIENT.connect(Secrets::MQTT_CLIENT_ID);
 
     if (!MQTT_STATUS)
@@ -127,7 +127,7 @@ void upload(JsonDocument packet)
 }
 
 void setup()
-{  
+{
     Serial.begin(115200);
     PREFS.begin("MAIN");
 
@@ -250,18 +250,27 @@ void setup()
     WIFI_TLS_CLIENT.setCertificate(Secrets::CLIENT_CERTIFICATE);
     WIFI_TLS_CLIENT.setCACert(Secrets::ROOT_CERTIFICATE);
 
-    WiFi.onEvent(
-        [](WiFiEvent_t event, WiFiEventInfo_t info) {
-            sleep();
-        },
-        WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
+    for (int x = 0; x < WIFI_TIMEOUT; x++)
+    {
+        if (WiFi.isConnected())
+        {
+            break;
+        }
+        delay(1000);
+    }
 
-    WiFi.onEvent(
-        [packet](WiFiEvent_t event, WiFiEventInfo_t info) {
-            upload(packet);
-            sleep();
-        },
-        WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_GOT_IP);
+    if (WiFi.isConnected())
+    {
+        upload(packet);
+        sleep();
+    }
+    else
+    {
+#ifdef DEBUG
+        Serial.println("[INFO] WIFI CON FAIL");
+#endif
+        sleep();
+    }
 }
 
 void loop(){};
